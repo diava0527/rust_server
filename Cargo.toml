@@ -1,0 +1,24 @@
+[package]
+name = "kvstore"
+version = "0.1.0"
+edition = "2021"
+description = "基于 Rust 的可持久化网络键值存储系统（高级系统编程技术课程设计）"
+authors = ["河海大学计算机与软件学院"]
+
+# 第三方依赖说明（均可在 crates.io 上找到，由 Cargo 自动下载）：
+#
+# serde       —— 序列化框架，为结构体/枚举自动生成 Serialize / Deserialize 实现。
+# serde_json  —— JSON 格式的序列化与反序列化，用于客户端与服务器的通信协议和持久化。
+# thiserror   —— 自定义错误类型的便捷宏，自动生成 Display 和 std::error::Error 实现。
+# anyhow      —— 在二进制入口处对错误做便捷包装（与 thiserror 配合，各司其职）。
+# clap        —— 命令行参数解析库，用 derive 宏从结构体自动生成 --addr 等参数。
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+
+# 发布构建默认开启较高优化等级，答辩演示时用 cargo run --release 性能更好。
+[profile.release]
+opt-level = 3
