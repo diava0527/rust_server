@@ -16,9 +16,7 @@
 //! ```
 
 use std::io::{BufRead, Write};
-
 use serde::{Deserialize, Serialize};
-
 use crate::error::Result;
 
 /// 客户端发送给服务器的请求。
@@ -140,30 +138,44 @@ pub struct StatusInfo {
 ///
 /// 提示：用 [`BufRead::read_line`] 读入一行；返回 0 字节即 EOF；
 /// 记得去掉行尾的 `\n` 和 `\r`（兼容 Windows 的 CRLF 换行）。
-///
-/// 【待实现】
 pub fn read_raw_line<R: BufRead>(reader: &mut R) -> Result<Option<String>> {
-    todo!("实现 read_raw_line：按行读取，EOF 返回 Ok(None)，去掉行尾换行符")
+    let mut line = String::new();
+    let bytes = reader.read_line(&mut line)?;
+    if bytes == 0 {
+        return Ok(None);
+    }
+    if line.ends_with('\n') {
+        line.pop();
+        if line.ends_with('\r') {
+            line.pop();
+        }
+    }
+    Ok(Some(line))
 }
 
 /// 读取一行并反序列化为指定类型 `T`。
 ///
 /// `None` 表示对端关闭连接；解析失败会返回 `Err`。
 /// 可复用 [`read_raw_line`] 拿到一行文本，再用 `serde_json::from_str` 解析。
-///
-/// 【待实现】
 pub fn read_message<R: BufRead, T: for<'de> Deserialize<'de>>(reader: &mut R) -> Result<Option<T>> {
-    todo!("实现 read_message：读取一行并反序列化为 T")
+    match read_raw_line(reader)? {
+        Some(line) => {
+            let msg = serde_json::from_str(&line)?;
+            Ok(Some(msg))
+        }
+        None => Ok(None),
+    }
 }
 
 /// 把消息序列化成一行 JSON 写入流中，并在末尾补换行作为消息边界。
 ///
 /// 函数对消息类型 `T` 泛型，因此既可以写 [`Request`] 也可以写 [`Response`]。
 /// 提示：`serde_json::to_string` 序列化，`writeln!` 补换行，最后 `flush`。
-///
-/// 【待实现】
 pub fn write_message<W: Write, T: Serialize>(writer: &mut W, msg: &T) -> Result<()> {
-    todo!("实现 write_message：序列化并写入一行 JSON")
+    let json = serde_json::to_string(msg)?;
+    writeln!(writer, "{}", json)?;
+    writer.flush()?;
+    Ok(())
 }
 
 #[cfg(test)]

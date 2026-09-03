@@ -18,8 +18,10 @@
 //! quit / exit         退出客户端
 //! ```
 
+use crate::protocol::{read_message, write_message, Request, Response};
+use std::io::{self, BufRead, BufReader, BufWriter, Write};
+use std::net::TcpStream;
 use crate::error::Result;
-use crate::protocol::{Request, Response};
 
 /// 客户端本地解析出的命令。
 #[derive(Debug)]
@@ -43,10 +45,52 @@ enum Command {
 ///
 /// 实现时需补 `use std::io::{self, BufRead, BufReader, Write};`、
 /// `use std::net::TcpStream;` 与 `use crate::protocol::{read_message, write_message};`。
-///
-/// 【待实现】
 pub fn run(addr: &str) -> Result<()> {
-    todo!("实现 run：交互式读取命令、收发消息、显示结果")
+    let stream = TcpStream::connect(addr)?;
+    let mut reader = BufReader::new(stream.try_clone()?);
+    let mut writer = BufWriter::new(stream);
+
+    let stdin = io::stdin();
+    let mut stdin_lock = stdin.lock();
+    let mut stdout = io::stdout();
+
+    loop {
+        print!("kv> ");
+        stdout.flush()?;
+
+        let mut input = String::new();
+        if stdin_lock.read_line(&mut input)? == 0 {
+            break;
+        }
+        let input = input.trim();
+        if input.is_empty() {
+            continue;
+        }
+
+        match parse_command(input) {
+            Ok(Command::Request(req)) => {
+                if let Err(e) = write_message(&mut writer, &req) {
+                    eprintln!("发送请求失败: {}", e);
+                    continue;
+                }
+                match read_message::<_, Response>(&mut reader) {
+                    Ok(Some(resp)) => print_response(&resp),
+                    Ok(None) => {
+                        println!("服务器关闭连接");
+                        break;
+                    }
+                    Err(e) => {
+                        eprintln!("接收响应失败: {}", e);
+                        continue;
+                    }
+                }
+            }
+            Ok(Command::Quit) => break,
+            Ok(Command::Help) => print_help(),
+            Err(e) => eprintln!("{}", e),
+        }
+    }
+    Ok(())
 }
 
 /// 把一行用户输入解析成 [`Command`]。
@@ -56,20 +100,60 @@ pub fn run(addr: &str) -> Result<()> {
 ///
 /// 提示：用 `line.find(char::is_whitespace)` 拆出命令名与剩余参数；
 /// `set` 需要把剩余参数再拆成「键 + 值」（值可含空格，见 [`split_key_value`]）。
-///
-/// 【待实现】
 fn parse_command(line: &str) -> std::result::Result<Command, String> {
-    todo!("实现 parse_command：解析 set/get/del/list/status/quit/help")
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return Err("空命令".to_string());
+    }
+
+    let first_space = trimmed.find(char::is_whitespace);
+    let (cmd, rest) = if let Some(pos) = first_space {
+        (trimmed[..pos].to_lowercase(), trimmed[pos..].trim_start())
+    } else {
+        (trimmed.to_lowercase(), "")
+    };
+
+    match cmd.as_str() {
+        "set" => {
+            let (key, value) = split_key_value(rest)
+                .ok_or_else(|| "缺少键或值".to_string())?;
+            Ok(Command::Request(Request::Set { key, value }))
+        }
+        "get" => {
+            if rest.is_empty() {
+                return Err("缺少键".to_string());
+            }
+            Ok(Command::Request(Request::Get { key: rest.to_string() }))
+        }
+        "del" => {
+            if rest.is_empty() {
+                return Err("缺少键".to_string());
+            }
+            Ok(Command::Request(Request::Del { key: rest.to_string() }))
+        }
+        "list" => Ok(Command::Request(Request::List)),
+        "status" => Ok(Command::Request(Request::Status)),
+        "quit" | "exit" => Ok(Command::Quit),
+        "help" => Ok(Command::Help),
+        _ => Err(format!("未知命令: {}", cmd)),
+    }
 }
 
 /// 把 `key value` 切分成键和值；值允许包含空格。
 ///
 /// 例如 `"课程名称 Rust 程序设计"` → `("课程名称", "Rust 程序设计")`。
 /// 键或值为空时返回 `None`。
-///
-/// 【待实现】
 fn split_key_value(rest: &str) -> Option<(String, String)> {
-    todo!("实现 split_key_value：在第一个空白处切分键与值")
+    let pos = rest.find(char::is_whitespace)?;
+    let key = rest[..pos].trim();
+    if key.is_empty() {
+        return None;
+    }
+    let value = rest[pos..].trim_start();
+    if value.is_empty() {
+        return None;
+    }
+    Some((key.to_string(), value.to_string()))
 }
 
 /// 打印客户端帮助信息（命令清单）。
@@ -90,10 +174,31 @@ fn print_help() {
 /// - `ok == true` 时：打印 `value`（查询结果）、`keys`（列表，空则打印"(空)"）、
 ///   `status`（状态信息各字段）；三者皆无则打印 `OK`（删除成功等）；
 /// - `ok == false` 时：打印 `error` 里的错误信息。
-///
-/// 【待实现】
 fn print_response(response: &Response) {
-    todo!("实现 print_response：按成功/失败与字段格式化打印")
+    if response.ok {
+        if let Some(value) = &response.value {
+            println!("{}", value);
+        } else if let Some(keys) = &response.keys {
+            if keys.is_empty() {
+                println!("(空)");
+            } else {
+                println!("keys: {:?}", keys);
+            }
+        } else if let Some(status) = &response.status {
+            println!("键数量: {}", status.key_count);
+            println!("客户端连接数: {}", status.client_count);
+            println!("监听地址: {}", status.listen_addr);
+            println!("数据文件: {}", status.data_file);
+        } else {
+            println!("OK");
+        }
+    } else {
+        if let Some(err) = &response.error {
+            eprintln!("错误: {}", err);
+        } else {
+            eprintln!("操作失败");
+        }
+    }
 }
 
 #[cfg(test)]
