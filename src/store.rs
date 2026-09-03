@@ -130,7 +130,7 @@ mod tests {
         store.set("a", "1");
         let old = store.set("a", "2");
         assert_eq!(old, Some("1".into())); // 返回被覆盖的旧值
-        assert_eq!(store.get("a"), Some("2".into()));
+        assert_eq!(store.get("a"),Some("2".into()));
     }
 
     #[test]
