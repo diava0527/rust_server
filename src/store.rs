@@ -10,7 +10,7 @@
 //! `RwLock` 属于过度设计。
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 /// 内存中的键值存储。
@@ -41,37 +41,42 @@ impl Store {
     /// 提示：`data.lock().unwrap()` 拿到 `MutexGuard`，再调用 `HashMap::insert`。
     /// 【待实现】
     pub fn set(&self, key: &str, value: &str) -> Option<String> {
-        todo!("实现 set：插入或覆盖，返回旧值")
+        self.data
+            .lock()
+            .unwrap()
+            .insert(key.to_owned(), value.to_owned())
     }
 
     /// 查询某个键对应的值，不存在时返回 `None`。
     /// 【待实现】
     pub fn get(&self, key: &str) -> Option<String> {
-        todo!("实现 get：查询并克隆返回")
+        self.data.lock().unwrap().get(key).cloned()
     }
 
     /// 删除某个键，返回被删除的值（若存在）。
     /// 【待实现】
     pub fn del(&self, key: &str) -> Option<String> {
-        todo!("实现 del：删除并返回被删除的值")
+        self.data.lock().unwrap().remove(key)
     }
 
     /// 列出所有键（排序后返回，保证输出稳定、便于测试与演示）。
     /// 【待实现】
     pub fn keys(&self) -> Vec<String> {
-        todo!("实现 keys：收集所有键并排序")
+        let mut keys: Vec<String> = self.data.lock().unwrap().keys().cloned().collect();
+        keys.sort();
+        keys
     }
 
     /// 返回当前键值对数量。
     /// 【待实现】
     pub fn len(&self) -> usize {
-        todo!("实现 len")
+        self.data.lock().unwrap().len()
     }
 
     /// 返回当前是否为空。
     /// 【待实现】
     pub fn is_empty(&self) -> bool {
-        todo!("实现 is_empty")
+        self.data.lock().unwrap().is_empty()
     }
 
     /// 取出整张表的快照（克隆一份），供持久化模块写盘使用。
@@ -79,31 +84,31 @@ impl Store {
     /// 克隆是有意的：避免在持锁期间做磁盘 I/O，缩短锁的持有时间。
     /// 【待实现】
     pub fn snapshot(&self) -> HashMap<String, String> {
-        todo!("实现 snapshot：克隆整张表")
+        self.data.lock().unwrap().clone()
     }
 
     /// 用整张表的内容整体替换当前数据（供启动恢复时批量载入使用）。
     /// 【待实现】
     pub fn load(&self, data: HashMap<String, String>) {
-        todo!("实现 load：整体替换")
+        *self.data.lock().unwrap() = data;
     }
 
     /// 客户端连接数加一。
     /// 【待实现】
     pub fn client_connected(&self) {
-        todo!("实现 client_connected")
+        self.client_count.fetch_add(1, Ordering::SeqCst);
     }
 
     /// 客户端连接数减一。
     /// 【待实现】
     pub fn client_disconnected(&self) {
-        todo!("实现 client_disconnected")
+        self.client_count.fetch_sub(1, Ordering::SeqCst);
     }
 
     /// 返回当前活跃连接数。
     /// 【待实现】
     pub fn client_count(&self) -> usize {
-        todo!("实现 client_count")
+        self.client_count.load(Ordering::SeqCst)
     }
 }
 
