@@ -12,9 +12,11 @@
 //!   给出明确错误提示，**绝不静默清空数据**。
 
 use std::collections::HashMap;
+use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use crate::error::Result;
+use crate::error::{KvError, Result};
 
 /// 负责把内存中的键值表保存到磁盘、并在启动时恢复。
 ///
@@ -48,7 +50,16 @@ impl Persistence {
     ///
     /// 【待实现】
     pub fn save(&self, data: &HashMap<String, String>) -> Result<()> {
-        todo!("实现 save：序列化并原子地写盘")
+        let json = serde_json::to_string_pretty(data)?;
+
+        if let Some(parent) = self.path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let temp_path = self.path.with_extension("json.tmp");
+        fs::write(&temp_path, json)?;
+        fs::rename(temp_path, &self.path)?;
+        Ok(())
     }
 
     /// 从磁盘读回整张表。
@@ -63,7 +74,17 @@ impl Persistence {
     ///
     /// 【待实现】
     pub fn load(&self) -> Result<HashMap<String, String>> {
-        todo!("实现 load：区分「不存在/损坏/合法」三种情况")
+        let contents = match fs::read_to_string(&self.path) {
+            Ok(contents) => contents,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(HashMap::new()),
+            Err(error) => return Err(error.into()),
+        };
+
+        if contents.trim().is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        serde_json::from_str(&contents).map_err(|error| KvError::CorruptedData(error.to_string()))
     }
 }
 
