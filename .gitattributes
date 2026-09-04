@@ -1,0 +1,11 @@
+# 统一行尾为 LF（以 WSL/Linux 为主要开发环境）。
+# 避免 Windows 上的 CRLF 产生无意义的 diff 噪音。
+* text=auto eol=lf
+
+# 项目内文本文件明确指定为 LF 行尾
+*.rs            text eol=lf
+*.toml          text eol=lf
+*.md            text eol=lf
+*.lock          text eol=lf
+.gitignore      text eol=lf
+.gitattributes  text eol=lf
